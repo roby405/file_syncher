@@ -167,7 +167,7 @@ class Peer:
 class ZcListener(ServiceListener):
     def __init__(self, peer):
         self.peer = peer
-        
+    
     def add_service(self, zc, type, name):
         info = zc.get_service_info(type, name)
         if info:
@@ -185,9 +185,9 @@ class ZcListener(ServiceListener):
             if ip in self.peer.peers:
                 del self.peer.peers[ip]
                 print(f"Lost peer: {ip}")
-                
+            
     def update_service(self, zc, type, name):
-        pass
+        pass  # You can add logic here if needed for service updates
 
 if __name__ == "__main__":
     import sys
