@@ -5,7 +5,7 @@ import time
 import json
 import hashlib
 import threading
-from zeroconf import Zeroconf, ServiceInfo, ServiceBrowser
+from zeroconf import Zeroconf, ServiceInfo, ServiceBrowser, ServiceListener
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 
@@ -164,7 +164,7 @@ class Peer:
         self.zc.unregister_service(self.info)
         self.zc.close()
 
-class ZcListener:
+class ZcListener(ServiceListener):
     def __init__(self, peer):
         self.peer = peer
         
@@ -172,10 +172,11 @@ class ZcListener:
         info = zc.get_service_info(type, name)
         if info:
             ip = socket.inet_ntoa(info.addresses[0])
-            self.peer.peers[ip] = {
-                "last_seen": time.time()
-            }
-            print(f"Discovered peer: {ip}")
+            if ip != socket.gethostbyname(socket.gethostname()):
+                self.peer.peers[ip] = {
+                    "last_seen": time.time()
+                }
+                print(f"Discovered peer: {ip}")
 
     def remove_service(self, zc, type, name):
         info = zc.get_service_info(type, name)
