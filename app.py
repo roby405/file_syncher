@@ -64,23 +64,29 @@ class Peer:
         sock.bind(("0.0.0.0", self.port))
         sock.listen(5)
         while True:
-            client, addr, = sock.accept()
-            data = json.loads(client.recv(4096).decode())
-            if data['type'] == 'manifest':
-                self.peers[addr[0]] = {
-                    "manifest": data["data"],
-                    "last_seen": time.time()
-                }
-                client.send(json.dumps({"type": "manifest", "data": self.manifest}).encode())
-            elif data["type"] == "update":
-                for file in data["data"]:
-                    if data["action"] == "add" or data["action"] == "modify":
-                        with open(os.path.join(self.folder, file["path"]), "wb") as f:
-                            f.write(file["content"])
-                    elif data["action"] == "delete":
-                        os.remove(os.path.join(self.folder, file["path"]))
-                client.send(json.dumps({"status": "ok"}).encode())
-            client.close()   
+            client, addr = sock.accept()
+            try:
+                print(f"Connection from {addr}")
+                data = json.loads(client.recv(4096).decode("utf-8"))
+                if data['type'] == 'manifest':
+                    self.peers[addr[0]] = {
+                        "manifest": data["data"],
+                        "last_seen": time.time()
+                    }
+                    client.send(json.dumps({"type": "manifest", "data": self.manifest}).encode("utf-8"))
+                elif data["type"] == "update":
+                    for file in data["data"]:
+                        if data["action"] == "add" or data["action"] == "modify":
+                            with open(os.path.join(self.folder, file["path"]), "wb") as f:
+                                f.write(file["content"])
+                        elif data["action"] == "delete":
+                            os.remove(os.path.join(self.folder, file["path"]))
+                    client.send(json.dumps({"status": "ok"}).encode("utf-8"))
+                self.manifest = self._generate_manifest()
+            except Exception as e:
+                print(f"Error handling connection from {addr}: {e}")
+            finally:
+                client.close()   
     
     def _sync(self):
         while True:
@@ -89,16 +95,19 @@ class Peer:
                 try:
                     sock = socket.socket()
                     sock.connect((ip, self.port))
-                    sock.send(json.dumps({"type": "manifest", "data": self.manifest}).encode())
-                    res = json.loads(sock.recv(4096).decode())
+                    sock.send(json.dumps({"type": "manifest", "data": self.manifest}).encode("utf-8"))
+                    res = json.loads(sock.recv(4096).decode("utf-8"))
                     if res["type"] == "manifest":
                         peer_manifest = res["data"]
                         self.peers[ip]["manifest"] = peer_manifest
                         self.peers[ip]["last_seen"] = time.time()
                         updates = self._check_for_updates(peer_manifest)
+                        print(self.manifest)
+                        print("that's mine ^")
+                        print(peer_manifest)
                         if updates:
-                            sock.send(json.dumps({"type": "update", "data": updates}).encode())
-                            ack = json.loads(sock.recv(1024).decode())
+                            sock.send(json.dumps({"type": "update", "data": updates}).encode("utf-8"))
+                            ack = json.loads(sock.recv(1024).decode("utf-8"))
                             if ack.get("status") == "ok":
                                 print(f"Synced with {ip}")
                     sock.close()
@@ -166,6 +175,7 @@ class ZcListener:
             self.peer.peers[ip] = {
                 "last_seen": time.time()
             }
+            print(f"Discovered peer: {ip}")
 
     def remove_service(self, zc, type, name):
         info = zc.get_service_info(type, name)
@@ -173,6 +183,7 @@ class ZcListener:
             ip = socket.inet_ntoa(info.addresses[0])
             if ip in self.peer.peers:
                 del self.peer.peers[ip]
+                print(f"Lost peer: {ip}")
                 
     def update_service(self, zc, type, name):
         pass
