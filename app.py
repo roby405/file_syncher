@@ -12,17 +12,20 @@ from watchdog.events import FileSystemEventHandler
 
 
 class Peer:
-    def __init__(self, folder_path, port=12405, interval=10):
+    def __init__(self, folder_path, port=12405, interval=1):
         self.folder = folder_path
         self.port = port
         self.interval = interval
         self.peers = {}
         self.manifest = self._generate_manifest()
         self.zc = Zeroconf()
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+            s.connect(("8.8.8.8", 80))
+            self.ip = s.getsockname()[0]
         self.info = ServiceInfo(
             "_p2psync._tcp.local.",
             f"p2psync_{socket.gethostname()}._p2psync._tcp.local.",
-            addresses=[socket.inet_aton(socket.gethostbyname(socket.gethostname()))],
+            addresses=[socket.inet_aton(self.ip)],
             port=self.port,
             properties={
                 "folder": self.folder,
@@ -91,7 +94,10 @@ class Peer:
     def _sync(self):
         while True:
             self.manifest = self._generate_manifest()
+            print(self.peers)
             for ip in list(self.peers.keys()):
+                print(ip)
+                print(self.port)
                 try:
                     sock = socket.socket()
                     sock.connect((ip, self.port))
@@ -168,25 +174,25 @@ class ZcListener(ServiceListener):
     def __init__(self, peer):
         self.peer = peer
     
-    def add_service(self, zc, type, name):
-        info = zc.get_service_info(type, name)
+    def add_service(self, zc, type_, name):
+        info = zc.get_service_info(type_, name)
         if info:
             ip = socket.inet_ntoa(info.addresses[0])
-            if ip != socket.gethostbyname(socket.gethostname()):
+            if ip != self.peer.ip:
                 self.peer.peers[ip] = {
                     "last_seen": time.time()
                 }
                 print(f"Discovered peer: {ip}")
 
-    def remove_service(self, zc, type, name):
-        info = zc.get_service_info(type, name)
+    def remove_service(self, zc, type_, name):
+        info = zc.get_service_info(type_, name)
         if info:
             ip = socket.inet_ntoa(info.addresses[0])
             if ip in self.peer.peers:
                 del self.peer.peers[ip]
                 print(f"Lost peer: {ip}")
             
-    def update_service(self, zc, type, name):
+    def update_service(self, zc, type_, name):
         pass  # You can add logic here if needed for service updates
 
 if __name__ == "__main__":
